@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import pdb
 
 from core.models.st_gcn.ops import ConvTemporalGraphical, Graph
 
@@ -34,6 +35,7 @@ class ST_GCN_18(nn.Module):
                  data_bn=True,
                  **kwargs):
         super().__init__()
+
 
         # load graph
         self.graph = Graph(**graph_cfg)
@@ -82,7 +84,7 @@ class ST_GCN_18(nn.Module):
         self.fcn = nn.Conv2d(fc_in_ch, num_class, kernel_size=1)
 
     def forward(self, x):
-
+        pdb.set_trace()
         # data normalization
         N, C, T, V, M = x.size()
         x = x.permute(0, 4, 3, 1, 2).contiguous()
@@ -101,6 +103,7 @@ class ST_GCN_18(nn.Module):
 
         # prediction
         x = self.fcn(x)
+        
         x = x.view(x.shape[:3])  # [B, C, T]
 
         return x

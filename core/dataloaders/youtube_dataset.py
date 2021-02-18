@@ -13,6 +13,8 @@ from core.utils.urmp import URMPSepInfo
 from pyhocon import ConfigTree
 import copy
 
+import pdb
+
 
 @dataclass
 class Sample:
@@ -28,6 +30,7 @@ class Sample:
     audio_path: Optional[str] = None
     rgb_path: Optional[str] = None
     flow_path: Optional[str] = None
+    imu_path: Optional[str] = None
 
 
 class YoutubeDataset(Dataset):
@@ -92,10 +95,12 @@ class YoutubeDataset(Dataset):
         self.use_control = 'control' in self.streams
         self.use_rgb = 'rgb' in self.streams
         self.use_flow = 'flow' in self.streams
+        self.use_imu = 'imu' in self.streams
 
     def __getitem__(self, index):
+        
         sample = self.samples[index]
-
+        
         if self.split == 'train':
             start_time = random.random() * (sample.duration - 1.5 * self.duration)
         else:
@@ -129,6 +134,10 @@ class YoutubeDataset(Dataset):
                 sample.flow_path, start_frame, self.num_frames
             )
             result['flow'] = torch.from_numpy(flow.astype(np.float32))
+            
+        if self.use_imu:
+            imu = utils.io.read_imu_feature_from_csv(sample.imu_path, start_frame, self.num_frames)
+            result['imu'] = torch.from_numpy(imu.astype(np.float32))
 
         if self.use_midi:
             pm = utils.io.read_midi(
@@ -238,6 +247,7 @@ class YoutubeDataset(Dataset):
     ):
         new_streams = {k: Path(v) for k, v in streams.items()}
         samples = []
+        #pdb.set_trace()
         for _i, row in df.iterrows():
             sample = Sample(
                 row.vid,
@@ -268,6 +278,10 @@ class YoutubeDataset(Dataset):
             if 'flow' in streams:
                 flow_path = new_streams['flow'] / f'{vid}.npy'
                 sample.flow_path = flow_path
+                
+            if 'imu' in streams:
+                imu_path = new_streams['imu'] / f'{vid}'
+                sample.imu_path = imu_path
 
             samples.append(sample)
         return samples

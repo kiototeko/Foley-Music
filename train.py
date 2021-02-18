@@ -15,13 +15,17 @@ from core.criterion import SmoothCrossEntropyLoss
 from core.optimizer import CustomSchedule
 from core.metrics import compute_epiano_accuracy
 from pprint import pprint
+import argparse
+
+import pdb
 
 
 class Engine(BaseEngine):
 
-    def __init__(self, cfg: ConfigTree):
+    def __init__(self, cfg: ConfigTree, args):
+            
+        #pdb.set_trace()
         self.cfg = cfg
-        print(cfg)
         self.summary_writer = SummaryWriter(log_dir=experiment_path)
         self.model_builder = ModelFactory(cfg)
         self.dataset_builder = DataLoaderFactory(cfg)
@@ -36,7 +40,13 @@ class Engine(BaseEngine):
         self.val_criterion = nn.CrossEntropyLoss(
             ignore_index=self.ds.PAD_IDX
         )
-        self.model: nn.Module = self.model_builder.build(device=torch.device('cuda'), wrapper=nn.DataParallel)
+        
+        self.model: nn.Module = self.model_builder.build(device=torch.device('cpu'), wrapper=nn.DataParallel)
+        
+        if(args.load):
+                cp = load_checkpoint()
+                self.model.load_state_dict(cp['state_dict'])
+                
         optimizer = optim.Adam(self.model.parameters(), lr=0., betas=(0.9, 0.98), eps=1e-9)
         self.optimizer = CustomSchedule(
             self.cfg.get_int('model.emb_dim'),
@@ -52,24 +62,28 @@ class Engine(BaseEngine):
         acc_meter = AverageMeter('Acc')
         num_iters = len(self.train_ds)
         self.model.train()
+        
         for i, data in enumerate(self.train_ds):
             midi_x, midi_y = data['midi_x'], data['midi_y']
-
+            pdb.set_trace()
             if self.ds.use_pose:
                 feat = data['pose']
             elif self.ds.use_rgb:
                 feat = data['rgb']
             elif self.ds.use_flow:
                 feat = data['flow']
+            elif self.ds.use_imu:
+                feat = data['imu'].transpose(1,2)
             else:
                 raise Exception('No feature!')
 
+            """
             feat, midi_x, midi_y = (
                 feat.cuda(non_blocking=True),
                 midi_x.cuda(non_blocking=True),
                 midi_y.cuda(non_blocking=True)
             )
-
+            """
             if self.ds.use_control:
                 control = data['control']
                 control = control.cuda(non_blocking=True)
@@ -186,15 +200,19 @@ class Engine(BaseEngine):
         self.summary_writer.close()
 
 
-def main():
+def main(args):
     from torchpie.config import config as cfg
     print('=' * 100)
     pprint(cfg)
     print('=' * 100)
-    engine = Engine(cfg)
+    engine = Engine(cfg, args)
     engine.run()
     engine.close()
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-l', '--load', action='store_true')
+    args, unknown = parser.parse_known_args()
+    main(args)

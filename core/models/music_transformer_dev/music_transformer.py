@@ -2,11 +2,14 @@ import torch
 import torch.nn as nn
 import random
 from core.models.st_gcn.st_gcn_aaai18 import st_gcn_baseline
+from core.models.imu_nn.imu_nn import imu_nn_baseline
 
 from .positional_encoding import PositionalEncoding
 from .rpr import TransformerEncoderRPR, TransformerEncoderLayerRPR, TransformerDecoderLayerRPR, TransformerDecoderRPR
 from torch import Tensor
 from typing import Optional
+
+import pdb
 
 
 def get_pad_mask(seq: Tensor, pad_idx: int) -> Tensor:
@@ -32,7 +35,7 @@ class MusicTransformer(nn.Module):
     def __init__(
             self,
             vocab_size: int,
-            pose_net: nn.Module,
+            imu_net: nn.Module,
             num_heads=8,
             d_model=512,
             dim_feedforward=1024,
@@ -76,7 +79,7 @@ class MusicTransformer(nn.Module):
                 dropout=self.dropout,
                 max_len=self.decoder_max_seq
             )
-        self.pose_net = pose_net
+        self.imu_net = imu_net
 
         # Positional encoding
         self.positional_encoding = PositionalEncoding(self.d_model, self.dropout, self.decoder_max_seq)
@@ -131,7 +134,7 @@ class MusicTransformer(nn.Module):
     # forward
     def forward(
             self,
-            pose: Tensor,
+            imu: Tensor,
             tgt: Tensor,
             use_mask=True,
             pad_idx=242,
@@ -145,18 +148,21 @@ class MusicTransformer(nn.Module):
         A prediction at one index is the "next" prediction given all information seen previously.
         ----------
         """
-
+        pdb.set_trace()
         tgt, subsequent_mask, tgt_key_padding_mask = self.get_tgt_embedding(tgt, pad_idx=pad_idx, use_mask=use_mask)
 
         if self.use_control:
             tgt = self.forward_concat_fc(tgt, control=control)
 
-        pose = self.forward_pose_net(pose)
+        
+        #imu = self.forward_imu_net(imu)
+        imu = self.imu_net(imu).transpose(0,1)
+
         # import ipdb; ipdb.set_trace()
         # Since there are no true decoder layers, the tgt is unused
         # Pytorch wants src and tgt to have some equal dims however
         x_out = self.transformer(
-            src=pose,
+            src=imu,
             tgt=tgt,
             tgt_mask=subsequent_mask,
             tgt_key_padding_mask=tgt_key_padding_mask
@@ -169,11 +175,11 @@ class MusicTransformer(nn.Module):
         # They are trained to predict the next note in sequence (we don't need the last one)
         return y
 
-    def forward_pose_net(self, pose: Tensor):
-        pose = self.pose_net(pose)
-        pose = pose.permute(2, 0, 1)  # [B_0, C_1, T_2] -> [T_2, B_0, C_1]
-        # pose = self.positional_encoding(pose)
-        return pose
+    def forward_imu_net(self, imu: Tensor):
+        imu = self.imu_net(imu)
+        imu = imu.permute(2, 0, 1)  # [B_0, C_1, T_2] -> [T_2, B_0, C_1]
+        # imu = self.positional_encoding(imu)
+        return imu
 
     def get_tgt_embedding(self, tgt, pad_idx=-1, use_mask=True):
         subsequent_mask, tgt_key_padding_mask = self.get_masks(
@@ -223,7 +229,7 @@ class MusicTransformer(nn.Module):
                 control = control.repeat(T, B, 1)  # [D] -> [T, B, D]
                 control[0] = 0.
             else:
-                control = control.transpose(0, 1)  # [B, T, D] -> [T, B, D]
+                control = control.transimu(0, 1)  # [B, T, D] -> [T, B, D]
                 control = control[:T]  
 
         control = self.control_positional_encoding(control)
@@ -235,7 +241,7 @@ class MusicTransformer(nn.Module):
 
     def generate(
             self,
-            pose: Tensor,
+            imu: Tensor,
             target_seq_length=1024,
             beam=0,
             beam_chance=1.0,
@@ -258,13 +264,13 @@ class MusicTransformer(nn.Module):
 
         print("Generating sequence of max length:", target_seq_length)
 
-        pose = self.forward_pose_net(pose)
-        memory: Tensor = self.transformer.encoder(pose)
+        imu = self.forward_imu_net(imu)
+        memory: Tensor = self.transformer.encoder(imu)
         if beam > 0:
             memory = memory.repeat(1, beam, 1)
-            gen_seq = torch.full((beam, target_seq_length), pad_idx, dtype=torch.long, device=pose.device)
+            gen_seq = torch.full((beam, target_seq_length), pad_idx, dtype=torch.long, device=imu.device)
         else:
-            gen_seq = torch.full((1, target_seq_length), pad_idx, dtype=torch.long, device=pose.device)
+            gen_seq = torch.full((1, target_seq_length), pad_idx, dtype=torch.long, device=imu.device)
 
         # num_primer = len(primer)  # [T, B]
         # gen_seq[..., :num_primer] = primer  # [B, T]?
@@ -374,9 +380,8 @@ def music_transformer_dev_baseline(
         layers=10 
 ):
     in_channels = 2 if layout == 'hands' else 3
-    pose_net = st_gcn_baseline(
-        in_channels, d_model, layers=layers, layout=layout, dropout=dropout
-    )
+    #imu_net = st_gcn_baseline(in_channels, d_model, layers=layers, layout=layout, dropout=dropout)
+    imu_net = imu_nn_baseline(18,d_model)
 
     if rnn is not None:
         if rnn == 'LSTM':
@@ -390,7 +395,7 @@ def music_transformer_dev_baseline(
 
     music_transformer = MusicTransformer(
         vocab_size,
-        pose_net,
+        imu_net,
         num_heads=num_heads,
         d_model=d_model,
         dim_feedforward=dim_feedforward,

@@ -4,6 +4,8 @@ import numpy as np
 import torch
 from typing import List, Optional
 from scipy.io import wavfile
+import itertools
+import csv
 
 
 def midi_to_array(filename: str, start_time: float, duration: float) -> np.ndarray:
@@ -90,11 +92,11 @@ def read_midi(filename: str, start_time: float, duration: float) -> PrettyMIDI:
     :return:
     """
     pm = PrettyMIDI(filename)
-
     pm.adjust_times(
         [start_time, start_time + duration],
         [0., duration]
     )
+
 
     return pm
 
@@ -122,3 +124,25 @@ def read_feature_from_npy(filename: str, start_frame: int, length: int) -> np.nd
 
     res = np.transpose(res, (1, 0))
     return res
+
+def read_imu_feature_from_csv(filename: str, start_frame: int, num_frames: int) -> np.ndarray:
+    
+    element = ['rot', 'gyro', 'acc']
+    axis = ['x', 'y', 'z']
+    parts = ['1','2']
+    
+    file_parts = [element, axis,parts]
+    
+    results = np.zeros((len(element)*len(axis)*len(parts),num_frames))
+    
+    for i,f in enumerate(list(itertools.product(*file_parts))):
+        with open(str(filename) + "_" + f[0] + "_" + f[1] + f[2] + ".csv") as csv_file:
+                csv_reader = csv.reader(csv_file, delimiter=',')
+                csv_reader.__next__()
+                data = csv_reader.__next__()
+                results[i,:] = data[start_frame:start_frame+num_frames]
+                
+    return results
+                
+                
+                
