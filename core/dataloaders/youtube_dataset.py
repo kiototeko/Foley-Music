@@ -66,7 +66,7 @@ class YoutubeDataset(Dataset):
         self.pose_layout = pose_layout
         self.random_shift_rate = random_shift_rate
 
-        self.audio_duration = self.duration + 0.5  # sound is slightly longer than action
+        self.audio_duration = self.duration #+ 0.5  # sound is slightly longer than action
 
         assert split in ['train', 'val', 'test'], split
         self.split = split
@@ -77,10 +77,20 @@ class YoutubeDataset(Dataset):
         self.samples = self.build_samples_from_dataframe(
             self.df,
             self.streams,
+            self.audio_duration
         )
 
+        
         if split == 'train':
-            self.samples *= duplication
+            num_new_samples = len(self.samples)*duplication-len(self.samples)
+            total_duration = sum(s.duration for s in self.samples)
+            new_samples = []
+            for s in self.samples:
+                    num_samples = np.ceil(s.duration/total_duration*num_new_samples)
+                    new_samples.extend([s for i in range(int(num_samples))])
+            #self.samples *= duplication
+            self.samples.extend(new_samples)
+            #self.samples = random.shuffle(self.samples)
         else:
             self.samples = self.split_val_samples_into_small_pieces(self.samples, duration)
 
@@ -102,7 +112,7 @@ class YoutubeDataset(Dataset):
         sample = self.samples[index]
         
         if self.split == 'train':
-            random_start = sample.duration - 1.5 * self.duration
+            random_start = sample.duration - self.duration#1.5 * self.duration
             if(random_start < 0):
                 start_time = 0
             else:
@@ -248,6 +258,7 @@ class YoutubeDataset(Dataset):
     def build_samples_from_dataframe(
             df: pd.DataFrame,
             streams: Dict[str, str],
+            duration
     ):
         new_streams = {k: Path(v) for k, v in streams.items()}
         samples = []
@@ -260,6 +271,9 @@ class YoutubeDataset(Dataset):
                 row.to_dict()
             )
 
+            if(sample.duration < duration):
+                    continue
+            
             vid = row.vid
             if 'midi' in new_streams:
                 midi_path = new_streams['midi'] / f'{vid}.midi'

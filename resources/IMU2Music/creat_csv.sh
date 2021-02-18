@@ -2,30 +2,52 @@
 
 HEADER="vid,start_time,duration"
 
+MIN_LEN=6
+
 array=($(find ../../data/IMU2Music/audio/ -iname "*.wav"))
 
-num_elements=${#array[@]}
+new_array=()
+TOTAL_LEN=0
+
+for i in "${array[@]}"
+do
+        FILE_LEN=$(soxi -D $i)
+        
+        if (( $(echo "$FILE_LEN < $MIN_LEN" |bc -l) ))
+	then
+		continue
+	fi
+	
+
+	new_array+=($i)
+	TOTAL_LEN=$(echo "$TOTAL_LEN + $FILE_LEN" | bc -l)
+
+done
+
+TRAIN_LIMIT=$(echo "$TOTAL_LEN*0.8" | bc -l)
+VAL_LIMIT=$(echo "$TRAIN_LIMIT + $TOTAL_LEN*0.1" | bc -l)
+
+num_elements=${#new_array[@]}
 
 echo $HEADER | tee train.csv val.csv test.csv > /dev/null
+
+ACC_LEN=0
 
 for (( i=0; i <$num_elements; i++ ))
 do
 
-	file_name=$(basename ${array[$i]} .wav)
+	file_name=$(basename ${new_array[$i]} .wav)
 
-	if [ ! -f "../../data/IMU2Music/midi/${file_name}.midi" ] || [ ! -s "../../data/IMU2Music/imu/${file_name}_acceleration_x1.csv" ]
-	then
-		continue
-	fi
-
-	duration=$(soxi -D ${array[$i]})
+	duration=$(soxi -D ${new_array[$i]})
 	line="$file_name,0.0,$duration"
+	
+	ACC_LEN=$(echo "$ACC_LEN + $duration" | bc -l)
 
 
-	if [ $i -lt 53 ]
+	if (( $(echo "$ACC_LEN < $TRAIN_LIMIT" |bc -l) ))
 	then
 		echo $line >> train.csv
-	elif [ $i -lt 64 ]
+	elif (( $(echo "$ACC_LEN < $VAL_LIMIT" |bc -l) ))
 	then
 		echo $line >> val.csv
 	else
@@ -33,3 +55,5 @@ do
 	fi
 
 done
+
+
