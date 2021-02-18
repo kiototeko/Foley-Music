@@ -65,7 +65,7 @@ class Engine(BaseEngine):
         
         for i, data in enumerate(self.train_ds):
             midi_x, midi_y = data['midi_x'], data['midi_y']
-            pdb.set_trace()
+            #pdb.set_trace()
             if self.ds.use_pose:
                 feat = data['pose']
             elif self.ds.use_rgb:

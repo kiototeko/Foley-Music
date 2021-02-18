@@ -127,7 +127,7 @@ def read_feature_from_npy(filename: str, start_frame: int, length: int) -> np.nd
 
 def read_imu_feature_from_csv(filename: str, start_frame: int, num_frames: int) -> np.ndarray:
     
-    element = ['rot', 'gyro', 'acc']
+    element = ['Rotation', 'gyro', 'acceleration']
     axis = ['x', 'y', 'z']
     parts = ['1','2']
     

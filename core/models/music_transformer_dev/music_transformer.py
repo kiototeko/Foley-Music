@@ -148,7 +148,7 @@ class MusicTransformer(nn.Module):
         A prediction at one index is the "next" prediction given all information seen previously.
         ----------
         """
-        pdb.set_trace()
+        #pdb.set_trace()
         tgt, subsequent_mask, tgt_key_padding_mask = self.get_tgt_embedding(tgt, pad_idx=pad_idx, use_mask=use_mask)
 
         if self.use_control:
