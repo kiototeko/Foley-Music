@@ -41,7 +41,7 @@ class Engine(BaseEngine):
             ignore_index=self.ds.PAD_IDX
         )
         
-        self.model: nn.Module = self.model_builder.build(device=torch.device('cpu'), wrapper=nn.DataParallel)
+        self.model: nn.Module = self.model_builder.build(device=torch.device('cuda'), wrapper=nn.DataParallel)
         
         if(args.load):
                 cp = load_checkpoint()
@@ -77,13 +77,13 @@ class Engine(BaseEngine):
             else:
                 raise Exception('No feature!')
 
-            """
+            
             feat, midi_x, midi_y = (
                 feat.cuda(non_blocking=True),
                 midi_x.cuda(non_blocking=True),
                 midi_y.cuda(non_blocking=True)
             )
-            """
+            
             if self.ds.use_control:
                 control = data['control']
                 control = control.cuda(non_blocking=True)
