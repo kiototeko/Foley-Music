@@ -102,7 +102,11 @@ class YoutubeDataset(Dataset):
         sample = self.samples[index]
         
         if self.split == 'train':
-            start_time = random.random() * (sample.duration - 1.5 * self.duration)
+            random_start = sample.duration - 1.5 * self.duration
+            if(random_start < 0):
+                start_time = 0
+            else:
+                start_time = random.random() * (random_start)
         else:
             start_time = 0.
 

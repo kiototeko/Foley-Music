@@ -17,7 +17,7 @@ class IMU_NN(nn.Module):
         self.fcn = nn.Linear(in_channels, num_class)
 
     def forward(self, x):
-        pdb.set_trace()
+        #pdb.set_trace()
        
 
         # prediction

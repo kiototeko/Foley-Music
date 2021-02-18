@@ -130,6 +130,7 @@ def read_imu_feature_from_csv(filename: str, start_frame: int, num_frames: int) 
     element = ['Rotation', 'gyro', 'acceleration']
     axis = ['x', 'y', 'z']
     parts = ['1','2']
+
     
     file_parts = [element, axis,parts]
     
