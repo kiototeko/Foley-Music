@@ -130,6 +130,8 @@ class Engine(BaseEngine):
                     feat = data['rgb']
                 elif self.ds.use_flow:
                     feat = data['flow']
+                elif self.ds.use_imu:
+                    feat = data['imu'].transpose(1,2)
                 else:
                     raise Exception('No feature!')
 

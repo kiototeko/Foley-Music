@@ -90,7 +90,6 @@ class YoutubeDataset(Dataset):
                     new_samples.extend([s for i in range(int(num_samples))])
             #self.samples *= duplication
             self.samples.extend(new_samples)
-            #self.samples = random.shuffle(self.samples)
         else:
             self.samples = self.split_val_samples_into_small_pieces(self.samples, duration)
 
