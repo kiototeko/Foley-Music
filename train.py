@@ -2,13 +2,13 @@ from core.engine import BaseEngine
 from pyhocon import ConfigTree
 from core.dataloaders import DataLoaderFactory
 from core.models import ModelFactory
-from torchpie.environment import experiment_path
+from Torchpie.torchpie.environment import experiment_path
 from torch.utils.tensorboard import SummaryWriter
 import torch
 from torch import nn, optim
-from torchpie.utils.checkpoint import save_checkpoint
-from torchpie.meters import AverageMeter
-from torchpie.logging import logger
+from Torchpie.torchpie.utils.checkpoint import save_checkpoint
+from Torchpie.torchpie.meters import AverageMeter
+from Torchpie.torchpie.logging import logger
 import time
 from core.dataloaders.youtube_dataset import YoutubeDataset
 from core.criterion import SmoothCrossEntropyLoss
@@ -25,6 +25,8 @@ class Engine(BaseEngine):
     def __init__(self, cfg: ConfigTree, args):
             
         #pdb.set_trace()
+        
+        
         self.cfg = cfg
         self.summary_writer = SummaryWriter(log_dir=experiment_path)
         self.model_builder = ModelFactory(cfg)
@@ -43,9 +45,6 @@ class Engine(BaseEngine):
         
         self.model: nn.Module = self.model_builder.build(device=torch.device('cuda'), wrapper=nn.DataParallel)
         
-        if(args.load):
-                cp = load_checkpoint()
-                self.model.load_state_dict(cp['state_dict'])
                 
         optimizer = optim.Adam(self.model.parameters(), lr=0., betas=(0.9, 0.98), eps=1e-9)
         self.optimizer = CustomSchedule(
@@ -54,6 +53,15 @@ class Engine(BaseEngine):
         )
 
         self.num_epochs = cfg.get_int('num_epochs')
+        
+        if(args.load):
+            print("loading model...")
+            checkpoint = torch.load(experiment_path + '/checkpoint.pth.tar')
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            epoch = checkpoint['epoch']
+            self.num_epochs -= epoch
+            #self.loss = checkpoint['loss']
 
         logger.info(f'Use control: {self.ds.use_control}')
 
@@ -65,7 +73,7 @@ class Engine(BaseEngine):
         
         for i, data in enumerate(self.train_ds):
             midi_x, midi_y = data['midi_x'], data['midi_y']
-            #pdb.set_trace()
+            pdb.set_trace()
             if self.ds.use_pose:
                 feat = data['pose']
             elif self.ds.use_rgb:
@@ -190,14 +198,13 @@ class Engine(BaseEngine):
 
             is_best = loss < best_loss
             best_loss = min(loss, best_loss)
-            save_checkpoint(
-                {
-                    'state_dict': self.model.module.state_dict(),
-                    'optimizer': self.optimizer.state_dict()
-                },
-                is_best=is_best,
-                folder=experiment_path
-            )
+            
+            torch.save({
+            'epoch': epoch,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'loss': loss,
+            }, experiment_path + '/' + 'checkpoint.pth.tar')
 
     def close(self):
         self.summary_writer.close()

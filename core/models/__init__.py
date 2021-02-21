@@ -1,5 +1,5 @@
 from pyhocon import ConfigTree
-from torchpie.logging import logger
+from Torchpie.torchpie.logging import logger
 
 import torch
 from torch import nn, Tensor
