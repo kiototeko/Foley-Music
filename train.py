@@ -65,8 +65,8 @@ class Engine(BaseEngine):
             #self.loss = checkpoint['loss']
         else:
             self.epochs_left = 0
-            checkpoint = torch.load('../Foley-Music/checkpoint.pth.tar') #Transfer learning
-            self.model.load_state_dict(checkpoint['model_state_dict'])
+            checkpoint = torch.load('../Foley-Music/exps/urmp-vn/checkpoint.pth.tar') #Transfer learning
+            self.model.load_state_dict(checkpoint['model_state_dict'], strict=False)
             
 
         logger.info(f'Use control: {self.ds.use_control}')
@@ -137,7 +137,7 @@ class Engine(BaseEngine):
         with torch.no_grad():
             for i, data in enumerate(self.test_ds):
                 midi_x, midi_y = data['midi_x'], data['midi_y']
-                pdb.set_trace()
+                #pdb.set_trace()
                 if self.ds.use_pose:
                     feat = data['pose']
                 elif self.ds.use_rgb:

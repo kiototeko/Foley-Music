@@ -65,12 +65,13 @@ def main(args):
     model_factory = ModelFactory(cfg)
     dataloader_factory = DataLoaderFactory(cfg)
 
-    model: MusicTransformer = model_factory.build(device=DEVICE)
+    #model: MusicTransformer = model_factory.build(device=DEVICE)
+    model: nn.Module = model_factory.build(device=torch.device('cuda'), wrapper=nn.DataParallel)
 
     model.load_state_dict(cp['state_dict'])
     model.eval()
 
-    dl = dataloader_factory.build(split='val')
+    dl = dataloader_factory.build(split='test')
     ds: YoutubeDataset = dl.dataset
     pprint(ds.samples[:5])
 
@@ -81,17 +82,17 @@ def main(args):
 
     for data in tqdm(ds):
         index = data['index']
-        pose = data['pose']
+        imu = data['imu']
 
-        pose = pose.cuda(non_blocking=True)
+        imu = imu.cuda(non_blocking=True)
         if control_tensor is not None:
             control_tensor = control_tensor.cuda(non_blocking=True)
 
         sample = ds.samples[index]
         urmp_sep_info = URMPSepInfo.from_row(sample.row)
 
-        events = model.generate(
-            pose.unsqueeze(0),
+        events = model.module.generate(
+            imu.unsqueeze(0),
             target_seq_length=ds.num_events,
             beam=5,
             pad_idx=ds.PAD_IDX,
