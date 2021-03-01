@@ -1,3 +1,6 @@
 [submodule "Torchpie"]
 	path = Torchpie
 	url = https://github.com/kiototeko/Torchpie.git
+[submodule "core/models/imu_nn/ConvTransformer"]
+	path = core/models/imu_nn/ConvTransformer
+	url = https://github.com/harryzhu123/ConvTransformer.git

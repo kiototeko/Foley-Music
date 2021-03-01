@@ -61,7 +61,10 @@ class Engine(BaseEngine):
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             epoch = checkpoint['epoch']
             self.num_epochs -= epoch
+            self.epochs_left = epoch
             #self.loss = checkpoint['loss']
+        else:
+            self.epochs_left = 0
 
         logger.info(f'Use control: {self.ds.use_control}')
 
@@ -81,7 +84,7 @@ class Engine(BaseEngine):
             elif self.ds.use_flow:
                 feat = data['flow']
             elif self.ds.use_imu:
-                feat = data['imu'].transpose(1,2)
+                feat = data['imu']
             else:
                 raise Exception('No feature!')
 
@@ -131,7 +134,7 @@ class Engine(BaseEngine):
         with torch.no_grad():
             for i, data in enumerate(self.test_ds):
                 midi_x, midi_y = data['midi_x'], data['midi_y']
-
+                pdb.set_trace()
                 if self.ds.use_pose:
                     feat = data['pose']
                 elif self.ds.use_rgb:
@@ -139,16 +142,17 @@ class Engine(BaseEngine):
                 elif self.ds.use_flow:
                     feat = data['flow']
                 elif self.ds.use_imu:
-                    feat = data['imu'].transpose(1,2)
+                    feat = data['imu']
                 else:
                     raise Exception('No feature!')
 
+                
                 feat, midi_x, midi_y = (
                     feat.cuda(non_blocking=True),
                     midi_x.cuda(non_blocking=True),
                     midi_y.cuda(non_blocking=True)
                 )
-
+                
                 if self.ds.use_control:
                     control = data['control']
                     control = control.cuda(non_blocking=True)
@@ -200,7 +204,7 @@ class Engine(BaseEngine):
             best_loss = min(loss, best_loss)
             
             torch.save({
-            'epoch': epoch,
+            'epoch': epoch + self.epochs_left,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'loss': loss,

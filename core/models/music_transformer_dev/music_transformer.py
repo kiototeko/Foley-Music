@@ -48,7 +48,8 @@ class MusicTransformer(nn.Module):
             num_decoder_layers=6,
             control_dim=12,
             use_control=False,
-            rnn: Optional[nn.RNNBase] = None
+            rnn: Optional[nn.RNNBase] = None,
+            convTransform = False
     ):
         super(MusicTransformer, self).__init__()
 
@@ -148,15 +149,15 @@ class MusicTransformer(nn.Module):
         A prediction at one index is the "next" prediction given all information seen previously.
         ----------
         """
-        #pdb.set_trace()
+        pdb.set_trace()
         tgt, subsequent_mask, tgt_key_padding_mask = self.get_tgt_embedding(tgt, pad_idx=pad_idx, use_mask=use_mask)
 
         if self.use_control:
             tgt = self.forward_concat_fc(tgt, control=control)
 
         
-        #imu = self.forward_imu_net(imu)
-        imu = self.imu_net(imu).transpose(0,1)
+        imu = self.forward_imu_net(imu)
+        #imu = self.imu_net(imu)
 
         # import ipdb; ipdb.set_trace()
         # Since there are no true decoder layers, the tgt is unused
@@ -176,8 +177,10 @@ class MusicTransformer(nn.Module):
         return y
 
     def forward_imu_net(self, imu: Tensor):
-        imu = self.imu_net(imu)
-        imu = imu.permute(2, 0, 1)  # [B_0, C_1, T_2] -> [T_2, B_0, C_1]
+        #pdb.set_trace()
+        imu = self.imu_net(imu).squeeze().transpose(0,1)
+
+        #imu = imu.permute(2, 0, 1)  # [B_0, C_1, T_2] -> [T_2, B_0, C_1]
         # imu = self.positional_encoding(imu)
         return imu
 
@@ -377,11 +380,12 @@ def music_transformer_dev_baseline(
         layout='body25',
         use_control=False,
         rnn: Optional[str] = None,
-        layers=10 
+        layers=10,
+        convTransform = False
 ):
     in_channels = 2 if layout == 'hands' else 3
     #imu_net = st_gcn_baseline(in_channels, d_model, layers=layers, layout=layout, dropout=dropout)
-    imu_net = imu_nn_baseline(18,d_model)
+    imu_net = imu_nn_baseline(2,d_model)
 
     if rnn is not None:
         if rnn == 'LSTM':
@@ -406,6 +410,7 @@ def music_transformer_dev_baseline(
         num_encoder_layers=num_encoder_layers,
         num_decoder_layers=num_decoder_layers,
         use_control=use_control,
-        rnn=rnn_cls
+        rnn=rnn_cls,
+        convTransform = convTransform
     )
     return music_transformer

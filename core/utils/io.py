@@ -134,14 +134,17 @@ def read_imu_feature_from_csv(filename: str, start_frame: int, num_frames: int) 
     
     file_parts = [element, axis,parts]
     
-    results = np.zeros((len(element)*len(axis)*len(parts),num_frames))
+    results = np.zeros((len(parts),len(element)*len(axis),num_frames))
     
     for i,f in enumerate(list(itertools.product(*file_parts))):
         with open(str(filename) + "_" + f[0] + "_" + f[1] + f[2] + ".csv") as csv_file:
                 csv_reader = csv.reader(csv_file, delimiter=',')
                 csv_reader.__next__()
                 data = csv_reader.__next__()
-                results[i,:] = data[start_frame:start_frame+num_frames]
+                part = int(f[2])-1
+                elem = element.index(f[0])*3
+                ax = axis.index(f[1])
+                results[part, ax+elem,:] = data[start_frame:start_frame+num_frames]
                 
     return results
                 
