@@ -43,7 +43,7 @@ class Engine(BaseEngine):
             ignore_index=self.ds.PAD_IDX
         )
         
-        self.model: nn.Module = self.model_builder.build(device=torch.device('cuda'), wrapper=nn.DataParallel)
+        self.model: nn.Module = self.model_builder.build(device=torch.device('cpu'), wrapper=nn.DataParallel)
         
                 
         optimizer = optim.Adam(self.model.parameters(), lr=0., betas=(0.9, 0.98), eps=1e-9)
@@ -65,11 +65,12 @@ class Engine(BaseEngine):
             #self.loss = checkpoint['loss']
         else:
             self.epochs_left = 0
-            checkpoint = torch.load('../Foley-Music/exps/urmp-vn/checkpoint.pth.tar') #Transfer learning
-            self.model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+            #checkpoint = torch.load('../Foley-Music/exps/urmp-vn/checkpoint.pth.tar') #Transfer learning
+            #self.model.load_state_dict(checkpoint['model_state_dict'], strict=False)
             
 
         logger.info(f'Use control: {self.ds.use_control}')
+        self.duration = self.cfg.get_float('dataset.duration')
 
     def train(self, epoch=0):
         loss_meter = AverageMeter('Loss')
@@ -91,13 +92,13 @@ class Engine(BaseEngine):
             else:
                 raise Exception('No feature!')
 
-            
+            """
             feat, midi_x, midi_y = (
                 feat.cuda(non_blocking=True),
                 midi_x.cuda(non_blocking=True),
                 midi_y.cuda(non_blocking=True)
             )
-            
+            """
             
             if self.ds.use_control:
                 control = data['control']

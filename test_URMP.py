@@ -19,6 +19,7 @@ from core.models.music_transformer_dev.music_transformer import MusicTransformer
 from core import utils
 import os
 from core.utils.urmp import URMPSepInfo
+from torch import nn
 
 DEVICE = torch.device('cuda')
 
@@ -68,7 +69,7 @@ def main(args):
     #model: MusicTransformer = model_factory.build(device=DEVICE)
     model: nn.Module = model_factory.build(device=torch.device('cuda'), wrapper=nn.DataParallel)
 
-    model.load_state_dict(cp['state_dict'])
+    model.load_state_dict(cp['model_state_dict'])
     model.eval()
 
     dl = dataloader_factory.build(split='test')
@@ -89,8 +90,7 @@ def main(args):
             control_tensor = control_tensor.cuda(non_blocking=True)
 
         sample = ds.samples[index]
-        urmp_sep_info = URMPSepInfo.from_row(sample.row)
-
+        print(imu.unsqueeze(0).shape)
         events = model.module.generate(
             imu.unsqueeze(0),
             target_seq_length=ds.num_events,
@@ -109,33 +109,27 @@ def main(args):
 
         print('this events shape: ', events.shape)
         print('this events length: ', len(events))
-        try:
-            video_path = next(video_dir.glob(f'**/{urmp_sep_info.video_filename}'))
-            print('Video path:', video_path)
-        except Exception as e:
-            print(e)
-            print('skip')
-            if args.only_audio:
-                pass
-            else:
-                continue
+
 
         ss = change_time_format(sample.start_time)
         dd = change_time_format(sample.start_time + length)
         add_name = '-' + ss + '-' + dd
 
-        midi_dir = output_dir / 'midi' / f'{urmp_sep_info.folder_name}'
+        folder_name = "samples"
+        midi_filename = sample.vid
+        audio_filename = sample.vid
+        midi_dir = output_dir / 'midi' / f'{"folder_name"}'
         os.makedirs(midi_dir, exist_ok=True)
-        midi_path = midi_dir / f'{urmp_sep_info.midi_filename}{add_name}.midi'
+        midi_path = midi_dir / f'{midi_filename}{add_name}.midi'
         pm = utils.midi.tensor_to_pm(
             events.squeeze(),
             instrument=instrument
         )
         pm.write(str(midi_path))
 
-        audio_dir = output_dir / 'audio' / f'{urmp_sep_info.folder_name}'
+        audio_dir = output_dir / 'audio' / f'{folder_name}'
         os.makedirs(audio_dir, exist_ok=True)
-        audio_path = audio_dir / f'{urmp_sep_info.audio_filename}{add_name}.wav'
+        audio_path = audio_dir / f'{audio_filename}{add_name}.wav'
 
         utils.midi.pm_to_wav(
             pm,
@@ -143,20 +137,6 @@ def main(args):
             rate=22050,
         )
 
-        if not args.only_audio:
-            in_path = video_path
-            folder_name = urmp_sep_info.folder_name
-            vid_dir = os.path.join(output_dir, 'video', folder_name)
-            if not os.path.exists(vid_dir):
-                os.mkdir(vid_dir)
-
-            # concat audio and video
-            vid_path = os.path.join(vid_dir, urmp_sep_info.video_filename.split('.')[0] + add_name + '.mp4')
-
-            # start time, input video, duration, input audio, duration
-            cmd2 = f'ffmpeg -y -ss {ss} -i {in_path} -t {length} -i {str(audio_path)} -t {length} -map 0:v:0 -map 1:a:0 -c:v libx264 -c:a aac -strict experimental {vid_path}'
-
-            os.system(cmd2)
 
 
 if __name__ == '__main__':

@@ -40,7 +40,7 @@ class MusicTransformer(nn.Module):
             d_model=512,
             dim_feedforward=1024,
             dropout=0.1,
-            # max_sequence=2048,
+            #max_sequence=2048,
             encoder_max_seq=300,
             decoder_max_seq=512,
             rpr=False,
@@ -49,7 +49,9 @@ class MusicTransformer(nn.Module):
             control_dim=12,
             use_control=False,
             rnn: Optional[nn.RNNBase] = None,
-            convTransform = False
+            convTransform = False,
+            duration=6.0,
+            fps=25
     ):
         super(MusicTransformer, self).__init__()
 
@@ -66,6 +68,8 @@ class MusicTransformer(nn.Module):
         self.control_dim = control_dim
         self.concat_dim = d_model + 1 + control_dim
         self.use_control = use_control
+        self.duration = duration
+        self.fps = fps
 
         # Input embedding
         self.embedding = nn.Embedding(vocab_size, self.d_model)
@@ -178,7 +182,9 @@ class MusicTransformer(nn.Module):
 
     def forward_imu_net(self, imu: Tensor):
         #pdb.set_trace()
-        imu = self.imu_net(imu).squeeze().transpose(0,1)
+        imu = torch.stack(torch.split(imu, self.fps, dim=3)).permute(1,2,3,4,0)
+        #imu = self.imu_net(imu).squeeze(1).transpose(0,1)
+        imu = self.imu_net(imu)
 
         #imu = imu.permute(2, 0, 1)  # [B_0, C_1, T_2] -> [T_2, B_0, C_1]
         # imu = self.positional_encoding(imu)
@@ -381,11 +387,16 @@ def music_transformer_dev_baseline(
         use_control=False,
         rnn: Optional[str] = None,
         layers=10,
-        convTransform = False
+        convTransform = False,
+        fps=25,
+        img_height=9,
+        batch_size=16,
+        duration=6,
+        in_channels=2
 ):
     in_channels = 2 if layout == 'hands' else 3
     #imu_net = st_gcn_baseline(in_channels, d_model, layers=layers, layout=layout, dropout=dropout)
-    imu_net = imu_nn_baseline(2,d_model)
+    imu_net = imu_nn_baseline(in_channels, d_model, fps, img_height, batch_size, int(duration), num_heads, num_decoder_layers)
 
     if rnn is not None:
         if rnn == 'LSTM':
@@ -411,6 +422,8 @@ def music_transformer_dev_baseline(
         num_decoder_layers=num_decoder_layers,
         use_control=use_control,
         rnn=rnn_cls,
-        convTransform = convTransform
+        convTransform = convTransform,
+        duration=duration,
+        fps=fps
     )
     return music_transformer

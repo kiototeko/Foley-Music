@@ -35,7 +35,12 @@ class ModelFactory:
                 rpr=self.cfg.get_bool('model.rpr', True),
                 use_control='control' in self.cfg.get_config('dataset.streams'),
                 rnn=self.cfg.get_string('model.rnn', None),
-                layers=self.cfg.get_int('model.pose_net_layers')
+                layers=self.cfg.get_int('model.pose_net_layers'),
+                fps=self.cfg.get_int('dataset.fps'),
+                img_height=self.cfg.get_int('dataset.sensor_channels'),
+                batch_size=self.cfg.get_int('batch_size'),
+                duration=duration,
+                in_channels=self.cfg.get_int('dataset.num_sensors')
             )
             if ckpt != 'ckpt':
                 pass
