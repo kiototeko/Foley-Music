@@ -19,12 +19,14 @@ class ModelFactory:
         events_per_sec = self.cfg.get_int('dataset.events_per_sec')
         ckpt = self.cfg.get_string('ckpt')
         streams = self.cfg.get_config('dataset.streams')
+        num_heads = self.cfg.get_int('num_heads')
         audio_duration = duration
 
         if self.cfg.get_string('model.name') == 'music_transformer':
             from .music_transformer_dev.music_transformer import music_transformer_dev_baseline
             pose_seq2seq = music_transformer_dev_baseline(
                 240 + 3,
+		num_heads=num_heads,
                 d_model=emb_dim,
                 dim_feedforward=emb_dim * 2,
                 encoder_max_seq=int(duration * fps),
@@ -40,7 +42,8 @@ class ModelFactory:
                 img_height=self.cfg.get_int('dataset.sensor_channels'),
                 batch_size=self.cfg.get_int('batch_size'),
                 duration=duration,
-                in_channels=self.cfg.get_int('dataset.num_sensors')
+                in_channels=self.cfg.get_int('dataset.num_sensors'),
+                convTransformer=self.cfg.get_bool('model.convTransformer')
             )
             if ckpt != 'ckpt':
                 pass

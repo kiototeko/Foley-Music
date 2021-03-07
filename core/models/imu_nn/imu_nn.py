@@ -18,6 +18,7 @@ class IMU_NN(nn.Module):
                  input_length,
                  num_heads,
                  depth,
+                 convTransformer,
                  **kwargs):
         super().__init__()
 
@@ -31,22 +32,23 @@ class IMU_NN(nn.Module):
         self.in_channels = in_channels
         self.heads = num_heads
         self.depth = depth
+        self.convTransformer = convTransformer
+
+        if(self.convTransformer):
+                self.generator = feature_generator(self.in_channels, self.d_model)        
+                self.pos_embedding = PositionalEncoding(self.d_model, self.batch_size, self.img_height, self.img_width, self.input_length)
+                self.Encoder = Encoder(self.d_model, self.heads, self.depth, self.img_height, self.img_width, self.input_length)
+        else:
+                #self.generator = feature_generator(self.in_channels, self.conv_channels)
+                self.fcn = nn.Linear(self.img_width*self.input_length, self.d_model)
+                self.conv = nn.Conv2d(in_channels=self.in_channels,
+                                out_channels=self.conv_channels,
+                                kernel_size=3,
+                                stride=1,
+                                padding=(3)//2)
+                self.bn = nn.BatchNorm2d(self.conv_channels)
+
         
-        self.pos_embedding = PositionalEncoding(self.d_model, self.batch_size, self.img_height, self.img_width, self.input_length)
-        self.Encoder = Encoder(self.d_model, self.heads, self.depth, self.img_height, self.img_width, self.input_length)
-        #self.Encoder = Encoder()
-        
-        """
-        self.conv = nn.Conv2d(in_channels=self.in_channels,
-                               out_channels=1,
-                               kernel_size=3,
-                               stride=1,
-                               padding=(2)//2)
-        self.bn = nn.BatchNorm2d(1)
-        """
-        self.generator = feature_generator(in_channels, self.conv_channels)
-        
-        self.fcn = nn.Linear(150, self.d_model)
 
     def forward(self, x):
         
@@ -61,24 +63,29 @@ class IMU_NN(nn.Module):
         enc_in = self.pos_embedding(feature_map)
         enc_out = self.Encoder(enc_in)
         """
-        feature_map = self.feature_embedding(x).permute(4,0,1,2,3)
-        enc_in = self.pos_embedding(feature_map)
-        enc_out = self.Encoder(enc_in)
+        if(self.convTransformer):
+                x = torch.stack(torch.split(x, self.img_width, dim=3)).permute(1,2,3,4,0)
+                feature_map = self.feature_embedding(x).permute(4,0,1,2,3)
+                enc_in = self.pos_embedding(feature_map)
+                enc_out = self.Encoder(enc_in).permute(1,2,3,4,0).contiguous().view(self.batch_size,self.d_model,-1).permute(2,0,1)
+        else:
+                pdb.set_trace()
+                out = F.leaky_relu(self.bn(self.conv(x)), negative_slope=0.01, inplace=False)
+                enc_out = self.fcn(out).squeeze(1).transpose(0,1)
         
-        return enc_out.permute(1,2,3,4,0).contiguous().view(self.batch_size,self.d_model,-1).permute(2,0,1)
+        return enc_out
 
     def feature_embedding(self,img):
-        generator = feature_generator(self.in_channels, self.d_model)
         gen_img = []
         for i in range(img.shape[-1]):
-            gen_img.append(generator(img[:, :, :, :, i]))
+            gen_img.append(self.generator(img[:, :, :, :, i]))
         gen_img = torch.stack(gen_img, dim=-1)
         return gen_img
 
 
 
 
-def imu_nn_baseline(in_channels, out_channels, img_width, img_height, batch_size, input_length, num_heads, depth):
+def imu_nn_baseline(in_channels, out_channels, img_width, img_height, batch_size, input_length, num_heads, depth, convTransformer):
 
     model = IMU_NN(
         in_channels,
@@ -88,7 +95,8 @@ def imu_nn_baseline(in_channels, out_channels, img_width, img_height, batch_size
         batch_size,
         input_length,
         num_heads,
-        depth
+        depth,
+        convTransformer
     )
     return model
 
@@ -118,8 +126,10 @@ class MultiConvAttention(nn.Module):
         self.d_model = d_model
         self.heads = heads
         self.W0 = torch.nn.Parameter(torch.randn((self.d_model, self.d_model)))
-        self.convs = [ConvAttention(self.d_model, int(self.d_model/self.heads)) for i in range(self.heads)]
-        
+        self.convs = nn.ModuleList([])
+        for i in range(self.heads):
+            self.convs.append(ConvAttention(self.d_model, int(self.d_model/self.heads)))
+
     def forward(self, x, **kwargs):
         head_list = []
         for c in self.convs:
@@ -207,10 +217,10 @@ class PositionalEncoding(nn.Module):
                                        self.img_width))*(position / np.power(10000, 2 * (hid_j // 2) / self.d_model)) for hid_j in range(self.d_model)]
             return torch.stack(return_list, dim=1)
         sinusoid_table = np.array([np.array(get_position_angle_vec(pos_i)) for pos_i in range(self.input_length)])
-        print(np.shape(sinusoid_table[0::2]))
+        #print(np.shape(sinusoid_table[0::2]))
         sinusoid_table[0::2] = np.sin(sinusoid_table[0::2])  # dim 2i
         sinusoid_table[1::2] = np.cos(sinusoid_table[1::2])  # dim 2i+1
-        print(np.shape(sinusoid_table))
+        #print(np.shape(sinusoid_table))
 
         return torch.from_numpy(sinusoid_table)#torch.stack(sinusoid_table, dim=-1)
 

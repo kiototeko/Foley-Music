@@ -93,6 +93,7 @@ class YoutubeDataset(Dataset):
         else:
             self.samples = self.split_val_samples_into_small_pieces(self.samples, duration)
 
+        print('Samples length:', len(self.samples))
         self.num_frames = int(duration * fps)
         self.num_events = max_seq
         self.num_audio_frames = int(self.audio_duration * audio_rate)  
@@ -337,7 +338,8 @@ class YoutubeDataset(Dataset):
             fps=cfg.get_float('dataset.fps'),
             events_per_sec=cfg.get_int('dataset.events_per_sec'),
             random_shift_rate=cfg.get_float('dataset.random_shift_rate', 0.2),
-            pose_layout=cfg.get_string('dataset.pose_layout')
+            pose_layout=cfg.get_string('dataset.pose_layout'),
+            max_seq=cfg.get_int('model.decoder_max_seq')
         )
 
     def __len__(self):

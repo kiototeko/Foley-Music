@@ -182,7 +182,7 @@ class MusicTransformer(nn.Module):
 
     def forward_imu_net(self, imu: Tensor):
         #pdb.set_trace()
-        imu = torch.stack(torch.split(imu, self.fps, dim=3)).permute(1,2,3,4,0)
+        
         #imu = self.imu_net(imu).squeeze(1).transpose(0,1)
         imu = self.imu_net(imu)
 
@@ -392,11 +392,12 @@ def music_transformer_dev_baseline(
         img_height=9,
         batch_size=16,
         duration=6,
-        in_channels=2
+        in_channels=2,
+        convTransformer=True
 ):
     in_channels = 2 if layout == 'hands' else 3
     #imu_net = st_gcn_baseline(in_channels, d_model, layers=layers, layout=layout, dropout=dropout)
-    imu_net = imu_nn_baseline(in_channels, d_model, fps, img_height, batch_size, int(duration), num_heads, num_decoder_layers)
+    imu_net = imu_nn_baseline(in_channels, d_model, fps, img_height, batch_size, int(duration), num_heads, num_decoder_layers, convTransformer)
 
     if rnn is not None:
         if rnn == 'LSTM':
