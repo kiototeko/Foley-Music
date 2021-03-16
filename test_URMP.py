@@ -72,7 +72,7 @@ def main(args):
     model.load_state_dict(cp['model_state_dict'])
     model.eval()
 
-    dl = dataloader_factory.build(split='val')
+    dl = dataloader_factory.build(split='test')
     ds: YoutubeDataset = dl.dataset
     pprint(ds.samples[:5])
 

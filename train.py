@@ -54,14 +54,14 @@ class Engine(BaseEngine):
         self.model: nn.Module = self.model_builder.build(device=torch.device(self.device), wrapper=nn.DataParallel)
         
                 
-        optimizer = optim.Adam(self.model.parameters(), lr=0., betas=(0.9, 0.98), eps=1e-9, weight_decay=1e-5)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=3e-4, betas=(0.9, 0.98), eps=1e-9, weight_decay=1e-5)
         
-        
+        """
         self.optimizer = CustomSchedule(
             self.cfg.get_int('model.emb_dim'),
             optimizer=optimizer,
         )
-        
+        """
         self.num_epochs = cfg.get_int('num_epochs')
         
         if(args.load):

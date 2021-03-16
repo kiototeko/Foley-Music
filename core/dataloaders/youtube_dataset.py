@@ -169,8 +169,8 @@ class YoutubeDataset(Dataset):
             )
             tgt = copy.deepcopy(pm)
 
-            # if self.split == 'train':
-            #     tgt = self.midi_transform(tgt)
+            if self.split == 'train':
+                tgt = self.midi_transform(tgt)
 
             """
             input:  1, 2, 3, [-1]

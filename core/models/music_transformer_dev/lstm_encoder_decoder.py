@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
+import pdb
 
 
 class lstm_encoder(nn.Module):
@@ -98,7 +99,7 @@ class lstm_decoder(nn.Module):
 class lstm_seq2seq(nn.Module):
     ''' train LSTM encoder-decoder and make predictions '''
     
-    def __init__(self, input_size, output_size, hidden_size):
+    def __init__(self, input_size, output_size, hidden_size, encoder_num_layers, decoder_num_layers):
 
         '''
         : param input_size:     the number of expected features in the input X
@@ -110,14 +111,58 @@ class lstm_seq2seq(nn.Module):
         self.input_size = input_size
         self.hidden_size = hidden_size
 
-        self.encoder = lstm_encoder(input_size = input_size, hidden_size = hidden_size)
-        self.decoder = lstm_decoder(input_size = output_size, hidden_size = hidden_size)
+        self.encoder = lstm_encoder(input_size = input_size, hidden_size = hidden_size, num_layers=encoder_num_layers)
+        self.decoder = lstm_decoder(input_size = output_size, hidden_size = hidden_size, num_layers=decoder_num_layers)
 
 
-    def forward(self, input, batch_size):
-            
+    def forward(self, input, target, batch_size, training_prediction = 'recursive', teacher_forcing_ratio = 0.5, dynamic_tf = False):
+        
+        #pdb.set_trace()
+        target_len = len(target)
+        outputs = torch.zeros(target_len, batch_size, input.shape[2])
         encoder_hidden = self.encoder.init_hidden(batch_size)
-        encoder_output, encoder_hidden = self.encoder(input_batch)
+        encoder_output, encoder_hidden = self.encoder(input)
+        decoder_input = input[-1, :, :]   # shape: (batch_size, input_size)
+        decoder_hidden = encoder_hidden
+        
+
+        if training_prediction == 'recursive':
+            # predict recursively
+            for t in range(target_len): 
+                decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
+                outputs[t] = decoder_output
+                decoder_input = decoder_output
+
+        if training_prediction == 'teacher_forcing':
+            # use teacher forcing
+            if random.random() < teacher_forcing_ratio:
+                for t in range(target_len): 
+                    decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
+                    outputs[t] = decoder_output
+                    decoder_input = target_batch[t, :, :]
+
+                # predict recursively 
+            else:
+                for t in range(target_len): 
+                    decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
+                    outputs[t] = decoder_output
+                    decoder_input = decoder_output
+
+        if training_prediction == 'mixed_teacher_forcing':
+        # predict using mixed teacher forcing
+            for t in range(target_len):
+                decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden)
+                outputs[t] = decoder_output
+                
+                # predict with teacher forcing
+                if random.random() < teacher_forcing_ratio:
+                    decoder_input = target_batch[t, :, :]
+                
+                # predict recursively 
+                else:
+                    decoder_input = decoder_output
+        return outputs
+
 
     def train_model(self, input_tensor, target_tensor, n_epochs, target_len, batch_size, training_prediction = 'recursive', teacher_forcing_ratio = 0.5, learning_rate = 0.01, dynamic_tf = False):
         

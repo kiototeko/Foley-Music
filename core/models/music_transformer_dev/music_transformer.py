@@ -8,7 +8,7 @@ from .positional_encoding import PositionalEncoding
 from .rpr import TransformerEncoderRPR, TransformerEncoderLayerRPR, TransformerDecoderLayerRPR, TransformerDecoderRPR
 from torch import Tensor
 from typing import Optional
-from .lstm import AudioToKeypointRNN
+from .lstm_encoder_decoder import lstm_seq2seq
 
 import pdb
 
@@ -97,6 +97,8 @@ class MusicTransformer(nn.Module):
 
         if self.rnn:
                 
+            self.transformer = lstm_seq2seq(self.d_model, self.d_model, self.hidden_dim, self.num_encoder_layers, self.num_decoder_layers)
+            """
             model_options = {
                 'dropout': self.dropout,
                 'batch_size': self.batch_size,
@@ -106,6 +108,7 @@ class MusicTransformer(nn.Module):
                 'trainable_init' : False
                 }
             self.transformer = AudioToKeypointRNN(model_options)
+            """
             """
             decoder_layer = TransformerDecoderLayerRNN(
                 self.d_model, self.nhead, self.d_ff, self.dropout, er_len=self.decoder_max_seq
@@ -173,6 +176,7 @@ class MusicTransformer(nn.Module):
         #pdb.set_trace()
         if self.rnn:
                 tgt = self.embedding(tgt)
+                tgt = tgt.permute(1, 0, 2)
         else:
                 tgt, subsequent_mask, tgt_key_padding_mask = self.get_tgt_embedding(tgt, pad_idx=pad_idx, use_mask=use_mask)
 
@@ -188,7 +192,7 @@ class MusicTransformer(nn.Module):
         # Pytorch wants src and tgt to have some equal dims however
         
         if self.rnn:
-                y = self.transformer(imu)
+                x_out = self.transformer(imu, tgt, self.batch_size)
         else:
                 x_out = self.transformer(
                 src=imu,
@@ -197,9 +201,9 @@ class MusicTransformer(nn.Module):
                 tgt_key_padding_mask=tgt_key_padding_mask
                 )
 
-                # Back to (batch_size, max_seq, d_model)
-                y = self.get_output(x_out)
-                # y = self.softmax(y)
+        # Back to (batch_size, max_seq, d_model)
+        y = self.get_output(x_out)
+        # y = self.softmax(y)
 
         # They are trained to predict the next note in sequence (we don't need the last one)
         return y
