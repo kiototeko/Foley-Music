@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 from einops import rearrange
 import pdb
+import copy
 
 
 
@@ -39,6 +40,7 @@ class IMU_NN(nn.Module):
                 self.pos_embedding = PositionalEncoding(self.d_model, self.batch_size, self.img_height, self.img_width, self.input_length)
                 self.Encoder = Encoder(self.d_model, self.heads, self.depth, self.img_height, self.img_width, self.input_length)
         else:
+                """
                 #self.generator = feature_generator(self.in_channels, self.conv_channels)
                 self.fcn = nn.Linear(self.img_width*self.input_length, self.d_model)
                 self.conv = nn.Conv2d(in_channels=self.in_channels,
@@ -47,8 +49,75 @@ class IMU_NN(nn.Module):
                                 stride=1,
                                 padding=(3)//2)
                 self.bn = nn.BatchNorm2d(self.conv_channels)
+                """
+                self.individual_net1 = nn.Sequential(
+                        nn.Conv2d(in_channels=1,out_channels=3,kernel_size=(3,2),stride=1,padding=0), #in_channel 1 -> 2
+                        nn.BatchNorm2d(3),
+                        nn.ReLU(inplace=True),
+                        nn.Dropout(p=0.2),
+                        nn.Conv2d(in_channels=3,out_channels=6,kernel_size=(1,3),stride=1,padding=0),
+                        nn.BatchNorm2d(6),
+                        nn.ReLU(inplace=True),
+                        nn.Dropout(p=0.2),
+                        nn.Conv2d(in_channels=6,out_channels=9,kernel_size=(1,2),stride=1,padding=0), #in_channel 1 -> 2
+                        nn.BatchNorm2d(9),
+                        nn.ReLU(inplace=True)
+                        
+                        )
+                self.individual_net2 = copy.deepcopy(self.individual_net1)
+                #self.individual_net3 = copy.deepcopy(self.individual_net1)
+                self.combined_net = nn.Sequential(
+                        nn.Conv2d(in_channels=1,out_channels=3,kernel_size=2,stride=1,padding=0),
+                        nn.BatchNorm2d(3),
+                        nn.ReLU(inplace=True),
+                        nn.Dropout(p=0.2),
+                        nn.Conv2d(in_channels=3,out_channels=9,kernel_size=(1,3),stride=2,padding=0), #kernel size 2 -> 3
+                        nn.BatchNorm2d(9),
+                        nn.ReLU(inplace=True),
+                        nn.Dropout(p=0.2),
+                        nn.Conv2d(in_channels=9,out_channels=27,kernel_size=(1,2),stride=1,padding=0),
+                        nn.BatchNorm2d(27),
+                        nn.ReLU(inplace=True),
+                        )
+                
+                #pdb.set_trace()
+                tmp_height, tmp_width = self.conv_output_shape((3, self.input_length*self.img_width), (3,2),1,0)
+                tmp_height, tmp_width = self.conv_output_shape((tmp_height, tmp_width), (1,3),1,0)
+                tmp_height, tmp_width = self.conv_output_shape((tmp_height, tmp_width), (1,2),1,0)
+                tmp_width *= 9
+                tmp_height = 2
+                tmp_height, tmp_width = self.conv_output_shape((tmp_height, tmp_width), 2,1,0)
+                tmp_height, tmp_width = self.conv_output_shape((tmp_height, tmp_width), (1,3),2,0)
+                tmp_height, tmp_width = self.conv_output_shape((tmp_height, tmp_width), (1,2),1,0)
+                print(tmp_width)
+                
+                self.fcn = nn.Linear(tmp_width, self.d_model)
+                self.dropout = nn.Dropout(p=0.5)
 
         
+    def conv_output_shape(self, h_w, kernel_size=1, stride=1, pad=0, dilation=1):
+        """
+        Utility function for computing output of convolutions
+        takes a tuple of (h,w) and returns a tuple of (h,w)
+        """
+        
+        if type(h_w) is not tuple:
+                h_w = (h_w, h_w)
+        
+        if type(kernel_size) is not tuple:
+                kernel_size = (kernel_size, kernel_size)
+        
+        if type(stride) is not tuple:
+                stride = (stride, stride)
+        
+        if type(pad) is not tuple:
+                pad = (pad, pad)
+        
+        h = (h_w[0] + (2 * pad[0]) - (dilation * (kernel_size[0] - 1)) - 1)// stride[0] + 1
+        w = (h_w[1] + (2 * pad[1]) - (dilation * (kernel_size[1] - 1)) - 1)// stride[1] + 1
+        
+        return h, w
+
 
     def forward(self, x):
         
@@ -69,10 +138,28 @@ class IMU_NN(nn.Module):
                 enc_in = self.pos_embedding(feature_map)
                 enc_out = self.Encoder(enc_in).permute(1,2,3,4,0).contiguous().view(self.batch_size,self.d_model,-1).permute(2,0,1)
         else:
-                pdb.set_trace()
+                """
                 out = F.leaky_relu(self.bn(self.conv(x)), negative_slope=0.01, inplace=False)
                 enc_out = self.fcn(out).squeeze(1).transpose(0,1)
-        
+                """
+                #pdb.set_trace()
+                
+                
+                sensor1 = torch.flatten(self.individual_net1(x[:,0,:,:].unsqueeze(1)), start_dim=1)
+                sensor2 = torch.flatten(self.individual_net2(x[:,1,:,:].unsqueeze(1)), start_dim=1)
+                #9*(9*(6*25-2) - 1)
+                sensors = torch.stack([sensor1, sensor2], dim=1).unsqueeze(1)
+                #enc_out = self.fcn(torch.flatten(self.combined_net(sensors), start_dim=1)).unsqueeze(1).transpose(0,1)
+                #enc_out = self.fcn(self.combined_net(sensors).transpose(1,3).contiguous().view(15,666,-1).transpose(1,2)).transpose(0,1)
+                enc_out = self.fcn(self.combined_net(sensors).squeeze(dim=2)).transpose(0,1)
+                """
+                sensor1 = torch.flatten(self.individual_net1(x[:,0,:,:]), start_dim=1)
+                sensor2 = torch.flatten(self.individual_net2(x[:,1,:,:]), start_dim=1)
+                sensor3 = torch.flatten(self.individual_net3(x[:,2,:,:]), start_dim=1)
+                sensors = torch.stack([sensor1, sensor2, sensor3], dim=1).unsqueeze(1)
+                enc_out = self.fcn(self.combined_net(sensors).squeeze(dim=2)).transpose(0,1)
+                """
+                
         return enc_out
 
     def feature_embedding(self,img):

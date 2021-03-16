@@ -8,6 +8,7 @@ from .positional_encoding import PositionalEncoding
 from .rpr import TransformerEncoderRPR, TransformerEncoderLayerRPR, TransformerDecoderLayerRPR, TransformerDecoderRPR
 from torch import Tensor
 from typing import Optional
+from .lstm import AudioToKeypointRNN
 
 import pdb
 
@@ -48,10 +49,12 @@ class MusicTransformer(nn.Module):
             num_decoder_layers=6,
             control_dim=12,
             use_control=False,
-            rnn: Optional[nn.RNNBase] = None,
+            rnn=False,
             convTransform = False,
             duration=6.0,
-            fps=25
+            fps=25,
+            batch_size=16,
+            hidden_dim=32
     ):
         super(MusicTransformer, self).__init__()
 
@@ -70,6 +73,9 @@ class MusicTransformer(nn.Module):
         self.use_control = use_control
         self.duration = duration
         self.fps = fps
+        self.batch_size = batch_size
+        self.hidden_dim = hidden_dim
+        self.rnn = rnn
 
         # Input embedding
         self.embedding = nn.Embedding(vocab_size, self.d_model)
@@ -89,8 +95,18 @@ class MusicTransformer(nn.Module):
         # Positional encoding
         self.positional_encoding = PositionalEncoding(self.d_model, self.dropout, self.decoder_max_seq)
 
-        if rnn is not None:
-            from .rnn import TransformerDecoderRNN, TransformerDecoderLayerRNN
+        if self.rnn:
+                
+            model_options = {
+                'dropout': self.dropout,
+                'batch_size': self.batch_size,
+                'hidden_dim': self.d_model,
+                'input_dim': self.d_model,
+                'output_dim': self.vocab_size,
+                'trainable_init' : False
+                }
+            self.transformer = AudioToKeypointRNN(model_options)
+            """
             decoder_layer = TransformerDecoderLayerRNN(
                 self.d_model, self.nhead, self.d_ff, self.dropout, er_len=self.decoder_max_seq
             )
@@ -103,6 +119,7 @@ class MusicTransformer(nn.Module):
                 num_decoder_layers=self.num_decoder_layers, dropout=self.dropout,  # activation=self.ff_activ,
                 dim_feedforward=self.d_ff, custom_decoder=decoder
             )
+            """
         else:
             # Base transformer
             if (not self.rpr):
@@ -154,7 +171,10 @@ class MusicTransformer(nn.Module):
         ----------
         """
         #pdb.set_trace()
-        tgt, subsequent_mask, tgt_key_padding_mask = self.get_tgt_embedding(tgt, pad_idx=pad_idx, use_mask=use_mask)
+        if self.rnn:
+                tgt = self.embedding(tgt)
+        else:
+                tgt, subsequent_mask, tgt_key_padding_mask = self.get_tgt_embedding(tgt, pad_idx=pad_idx, use_mask=use_mask)
 
         if self.use_control:
             tgt = self.forward_concat_fc(tgt, control=control)
@@ -166,16 +186,20 @@ class MusicTransformer(nn.Module):
         # import ipdb; ipdb.set_trace()
         # Since there are no true decoder layers, the tgt is unused
         # Pytorch wants src and tgt to have some equal dims however
-        x_out = self.transformer(
-            src=imu,
-            tgt=tgt,
-            tgt_mask=subsequent_mask,
-            tgt_key_padding_mask=tgt_key_padding_mask
-        )
+        
+        if self.rnn:
+                y = self.transformer(imu)
+        else:
+                x_out = self.transformer(
+                src=imu,
+                tgt=tgt,
+                tgt_mask=subsequent_mask,
+                tgt_key_padding_mask=tgt_key_padding_mask
+                )
 
-        # Back to (batch_size, max_seq, d_model)
-        y = self.get_output(x_out)
-        # y = self.softmax(y)
+                # Back to (batch_size, max_seq, d_model)
+                y = self.get_output(x_out)
+                # y = self.softmax(y)
 
         # They are trained to predict the next note in sequence (we don't need the last one)
         return y
@@ -268,7 +292,7 @@ class MusicTransformer(nn.Module):
         the softmax probabilities (recommended) or by using a beam search.
         ----------
         """
-
+        #pdb.set_trace()
         assert (not self.training), "Cannot generate while in training mode"
 
         print("Generating sequence of max length:", target_seq_length)
@@ -385,7 +409,7 @@ def music_transformer_dev_baseline(
         num_decoder_layers=0,
         layout='body25',
         use_control=False,
-        rnn: Optional[str] = None,
+        rnn=False,
         layers=10,
         convTransform = False,
         fps=25,
@@ -393,21 +417,13 @@ def music_transformer_dev_baseline(
         batch_size=16,
         duration=6,
         in_channels=2,
-        convTransformer=True
+        convTransformer=True,
+        hidden_dim=32
 ):
     in_channels = 2 if layout == 'hands' else 3
     #imu_net = st_gcn_baseline(in_channels, d_model, layers=layers, layout=layout, dropout=dropout)
     imu_net = imu_nn_baseline(in_channels, d_model, fps, img_height, batch_size, int(duration), num_heads, num_decoder_layers, convTransformer)
 
-    if rnn is not None:
-        if rnn == 'LSTM':
-            rnn_cls = nn.LSTM
-        elif rnn == 'GRU':
-            rnn_cls = nn.GRU
-        else:
-            raise Exception(f'No such rnn: {rnn}')
-    else:
-        rnn_cls = None
 
     music_transformer = MusicTransformer(
         vocab_size,
@@ -422,9 +438,11 @@ def music_transformer_dev_baseline(
         num_encoder_layers=num_encoder_layers,
         num_decoder_layers=num_decoder_layers,
         use_control=use_control,
-        rnn=rnn_cls,
+        rnn=rnn,
         convTransform = convTransform,
         duration=duration,
-        fps=fps
+        fps=fps,
+        batch_size=batch_size,
+        hidden_dim=hidden_dim
     )
     return music_transformer

@@ -19,13 +19,13 @@ class ModelFactory:
         events_per_sec = self.cfg.get_int('dataset.events_per_sec')
         ckpt = self.cfg.get_string('ckpt')
         streams = self.cfg.get_config('dataset.streams')
-        num_heads = self.cfg.get_int('num_heads')
+        num_heads = self.cfg.get_int('model.num_heads')
         audio_duration = duration
 
         if self.cfg.get_string('model.name') == 'music_transformer':
             from .music_transformer_dev.music_transformer import music_transformer_dev_baseline
             pose_seq2seq = music_transformer_dev_baseline(
-                240 + 3,
+                243,#123,#240 + 3, #88*2 for note_on/off, 32 velocity, 32 time_shift, 3 pad
 		num_heads=num_heads,
                 d_model=emb_dim,
                 dim_feedforward=emb_dim * 2,
@@ -36,14 +36,15 @@ class ModelFactory:
                 num_decoder_layers=self.cfg.get_int('model.num_decoder_layers', 3),
                 rpr=self.cfg.get_bool('model.rpr', True),
                 use_control='control' in self.cfg.get_config('dataset.streams'),
-                rnn=self.cfg.get_string('model.rnn', None),
+                rnn=self.cfg.get_bool('model.rnn'),
                 layers=self.cfg.get_int('model.pose_net_layers'),
                 fps=self.cfg.get_int('dataset.fps'),
                 img_height=self.cfg.get_int('dataset.sensor_channels'),
                 batch_size=self.cfg.get_int('batch_size'),
                 duration=duration,
                 in_channels=self.cfg.get_int('dataset.num_sensors'),
-                convTransformer=self.cfg.get_bool('model.convTransformer')
+                convTransformer=self.cfg.get_bool('model.convTransformer'),
+                hidden_dim=self.cfg.get_int('model.hidden_dim')
             )
             if ckpt != 'ckpt':
                 pass

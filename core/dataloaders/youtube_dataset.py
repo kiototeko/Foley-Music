@@ -12,6 +12,7 @@ from pretty_midi import PrettyMIDI
 from core.utils.urmp import URMPSepInfo
 from pyhocon import ConfigTree
 import copy
+from torchvision import transforms
 
 import pdb
 
@@ -34,9 +35,9 @@ class Sample:
 
 
 class YoutubeDataset(Dataset):
-    SOS_IDX = 240
-    EOS_IDX = 241
-    PAD_IDX = 242
+    SOS_IDX = 240#120#240
+    EOS_IDX = 240 + 1#121#241
+    PAD_IDX = 240 + 2#122#242
 
     BODY_PARTS = {
         'body25': 25,
@@ -92,6 +93,7 @@ class YoutubeDataset(Dataset):
             self.samples.extend(new_samples)
         else:
             self.samples = self.split_val_samples_into_small_pieces(self.samples, duration)
+            
 
         print('Samples length:', len(self.samples))
         self.num_frames = int(duration * fps)
@@ -106,9 +108,11 @@ class YoutubeDataset(Dataset):
         self.use_rgb = 'rgb' in self.streams
         self.use_flow = 'flow' in self.streams
         self.use_imu = 'imu' in self.streams
+        
+        self.add_noise = transforms.Lambda(lambda x: x + torch.rand(x.shape))
+        self.one = True
 
     def __getitem__(self, index):
-        
         sample = self.samples[index]
         
         if self.split == 'train':
@@ -152,6 +156,12 @@ class YoutubeDataset(Dataset):
         if self.use_imu:
             imu = utils.io.read_imu_feature_from_csv(sample.imu_path, start_frame, self.num_frames)
             result['imu'] = torch.from_numpy(imu.astype(np.float32))
+            
+            
+        
+            if self.split == "train":
+                #result['imu'] = self.add_noise(result['imu'])
+                self.one = False
 
         if self.use_midi:
             pm = utils.io.read_midi(

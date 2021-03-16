@@ -131,22 +131,48 @@ def read_imu_feature_from_csv(filename: str, start_frame: int, num_frames: int) 
     axis = ['x', 'y', 'z']
     parts = ['1','2']
 
+    max_element = [4, 150, 20]
+    min_element = [-4, -150, -20]
+    
     
     file_parts = [element, axis,parts]
     
-    results = np.zeros((len(parts),len(element)*len(axis),num_frames))
+    #results = np.zeros((len(parts),len(element)*len(axis),num_frames))
+    results = np.zeros((len(parts),len(element),num_frames))
     
     for i,f in enumerate(list(itertools.product(*file_parts))):
         with open(str(filename) + "_" + f[0] + "_" + f[1] + f[2] + ".csv") as csv_file:
                 csv_reader = csv.reader(csv_file, delimiter=',')
                 csv_reader.__next__()
                 data = csv_reader.__next__()
+                data = np.array([float(i) if i else 0 for i in data])
                 part = int(f[2])-1
-                elem = element.index(f[0])*3
+                #elem = element.index(f[0])*3
+                elem = element.index(f[0])
                 ax = axis.index(f[1])
-                results[part, ax+elem,:] = data[start_frame:start_frame+num_frames]
+                #results[part, ax+elem,:] = data[start_frame:start_frame+num_frames]
+                results[part, elem,:] += np.square((data[start_frame:start_frame+num_frames] - min_element[elem])/(max_element[elem]-min_element[elem]))
                 
+    #return results
+    return np.sqrt(results)
+    """
+                
+    #results = np.zeros((len(parts),len(element)*len(axis),num_frames))
+    results = np.zeros((len(element),len(parts),len(axis),num_frames))
+    
+    for i,f in enumerate(list(itertools.product(*file_parts))):
+        with open(str(filename) + "_" + f[0] + "_" + f[1] + f[2] + ".csv") as csv_file:
+                csv_reader = csv.reader(csv_file, delimiter=',')
+                csv_reader.__next__()
+                data = csv_reader.__next__()
+                data = np.array([float(i) if i else 0 for i in data])
+                part = int(f[2])-1
+                #elem = element.index(f[0])*3
+                elem = element.index(f[0])
+                ax = axis.index(f[1])
+                #results[part, ax+elem,:] = data[start_frame:start_frame+num_frames]
+                results[elem, part, ax,:] += (data[start_frame:start_frame+num_frames] - min_element[elem])/(max_element[elem]-min_element[elem])
+                
+    #return results
     return results
-                
-                
-                
+    """

@@ -1,5 +1,6 @@
 import numpy as np
 import copy, itertools, collections
+import math
 from pretty_midi import PrettyMIDI, Note, Instrument
 
 # ==================================================================================
@@ -153,7 +154,7 @@ class EventSeq:
                     velocity_index = np.searchsorted(velocity_bins, velocity)
                     note_events.append(Event('velocity', note.start, velocity_index))
 
-                pitch_index = note.pitch - EventSeq.pitch_range.start
+                pitch_index = note.pitch - EventSeq.pitch_range.start#int(math.floor((note.pitch - EventSeq.pitch_range.start)/2))
                 note_events.append(Event('note_on', note.start, pitch_index))
                 note_events.append(Event('note_off', note.end, pitch_index))
 
@@ -199,11 +200,12 @@ class EventSeq:
     @staticmethod
     def feat_dims():
         feat_dims = collections.OrderedDict()
-        feat_dims['note_on'] = len(EventSeq.pitch_range)
-        feat_dims['note_off'] = len(EventSeq.pitch_range)
+        feat_dims['note_on'] = len(EventSeq.pitch_range)#int(len(EventSeq.pitch_range)/2)
+        feat_dims['note_off'] = len(EventSeq.pitch_range)#int(len(EventSeq.pitch_range)/2)
         if USE_VELOCITY:
             feat_dims['velocity'] = EventSeq.velocity_steps
         feat_dims['time_shift'] = len(EventSeq.time_shift_bins)
+        
         return feat_dims
 
     @staticmethod
@@ -247,13 +249,13 @@ class EventSeq:
 
         for event in self.events:
             if event.type == 'note_on':
-                pitch = event.value + EventSeq.pitch_range.start
+                pitch = event.value + EventSeq.pitch_range.start#event.value*2 + EventSeq.pitch_range.start
                 note = Note(velocity, pitch, time, None)
                 notes.append(note)
                 last_notes[pitch] = note
 
             elif event.type == 'note_off':
-                pitch = event.value + EventSeq.pitch_range.start
+                pitch = event.value + EventSeq.pitch_range.start#event.value*2 + EventSeq.pitch_range.start
 
                 if pitch in last_notes:
                     note = last_notes[pitch]

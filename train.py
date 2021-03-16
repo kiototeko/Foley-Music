@@ -15,6 +15,7 @@ from core.criterion import SmoothCrossEntropyLoss
 from core.optimizer import CustomSchedule
 from core.metrics import compute_epiano_accuracy
 from pprint import pprint
+import numpy as np
 import argparse
 
 import pdb
@@ -28,6 +29,7 @@ class Engine(BaseEngine):
         
         
         self.cfg = cfg
+        self.device = self.cfg.get_string('device')
         self.summary_writer = SummaryWriter(log_dir=experiment_path)
         self.model_builder = ModelFactory(cfg)
         self.dataset_builder = DataLoaderFactory(cfg)
@@ -36,6 +38,8 @@ class Engine(BaseEngine):
         self.test_ds = self.dataset_builder.build(split='val')
         self.ds: YoutubeDataset = self.train_ds.dataset
 
+        
+        
         self.train_criterion = nn.CrossEntropyLoss(
             ignore_index=self.ds.PAD_IDX
         )
@@ -43,15 +47,21 @@ class Engine(BaseEngine):
             ignore_index=self.ds.PAD_IDX
         )
         
-        self.model: nn.Module = self.model_builder.build(device=torch.device('cuda'), wrapper=nn.DataParallel)
+        
+        
+        
+        
+        self.model: nn.Module = self.model_builder.build(device=torch.device(self.device), wrapper=nn.DataParallel)
         
                 
-        optimizer = optim.Adam(self.model.parameters(), lr=0., betas=(0.9, 0.98), eps=1e-9)
+        optimizer = optim.Adam(self.model.parameters(), lr=0., betas=(0.9, 0.98), eps=1e-9, weight_decay=1e-5)
+        
+        
         self.optimizer = CustomSchedule(
             self.cfg.get_int('model.emb_dim'),
             optimizer=optimizer,
         )
-
+        
         self.num_epochs = cfg.get_int('num_epochs')
         
         if(args.load):
@@ -77,9 +87,14 @@ class Engine(BaseEngine):
         acc_meter = AverageMeter('Acc')
         num_iters = len(self.train_ds)
         self.model.train()
+        count = 0
+        model_parameters = filter(lambda p: p.requires_grad, self.model.parameters())
+        count = sum([np.prod(p.size()) for p in model_parameters])
+        print(count)
         
         for i, data in enumerate(self.train_ds):
             midi_x, midi_y = data['midi_x'], data['midi_y']
+            
             #pdb.set_trace()
             if self.ds.use_pose:
                 feat = data['pose']
@@ -92,13 +107,13 @@ class Engine(BaseEngine):
             else:
                 raise Exception('No feature!')
 
-            
-            feat, midi_x, midi_y = (
-                feat.cuda(non_blocking=True),
-                midi_x.cuda(non_blocking=True),
-                midi_y.cuda(non_blocking=True)
-            )
-            
+            if(self.device == 'cuda'):
+                feat, midi_x, midi_y = (
+                        feat.cuda(non_blocking=True),
+                        midi_x.cuda(non_blocking=True),
+                        midi_y.cuda(non_blocking=True)
+                )
+           
             
             if self.ds.use_control:
                 control = data['control']
@@ -150,12 +165,12 @@ class Engine(BaseEngine):
                 else:
                     raise Exception('No feature!')
 
-                
-                feat, midi_x, midi_y = (
-                    feat.cuda(non_blocking=True),
-                    midi_x.cuda(non_blocking=True),
-                    midi_y.cuda(non_blocking=True)
-                )
+                if(self.device == 'cuda'):
+                        feat, midi_x, midi_y = (
+                        feat.cuda(non_blocking=True),
+                        midi_x.cuda(non_blocking=True),
+                        midi_y.cuda(non_blocking=True)
+                        )
                 
                 if self.ds.use_control:
                     control = data['control']

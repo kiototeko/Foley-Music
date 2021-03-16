@@ -20,6 +20,7 @@ from core import utils
 import os
 from core.utils.urmp import URMPSepInfo
 from torch import nn
+import pdb
 
 DEVICE = torch.device('cuda')
 
@@ -48,7 +49,6 @@ def main(args):
     torch.set_grad_enabled(False)
 
     checkpoint_path = Path(args.checkpoint)
-    video_dir = Path(args.video)
     output_dir = Path(args.output)
     if args.control is not None:
         control_tensor = utils.midi.pitch_histogram_string_to_control_tensor(args.control)
@@ -67,12 +67,12 @@ def main(args):
     dataloader_factory = DataLoaderFactory(cfg)
 
     #model: MusicTransformer = model_factory.build(device=DEVICE)
-    model: nn.Module = model_factory.build(device=torch.device('cuda'), wrapper=nn.DataParallel)
+    model: nn.Module = model_factory.build(device=torch.device('cpu'), wrapper=nn.DataParallel)
 
     model.load_state_dict(cp['model_state_dict'])
     model.eval()
 
-    dl = dataloader_factory.build(split='test')
+    dl = dataloader_factory.build(split='val')
     ds: YoutubeDataset = dl.dataset
     pprint(ds.samples[:5])
 
@@ -80,12 +80,22 @@ def main(args):
     # One is for generated audio, one is for generated video
     os.makedirs(output_dir / 'audio', exist_ok=True)
     os.makedirs(output_dir / 'video', exist_ok=True)
+    
+    test_criterion = nn.CrossEntropyLoss(
+            ignore_index=ds.PAD_IDX
+        )
+    
+    print(len(ds), "samples")
+    
 
     for data in tqdm(ds):
+
+        #pdb.set_trace()
         index = data['index']
         imu = data['imu']
+        midi_x, midi_y = data['midi_x'], data['midi_y']
 
-        imu = imu.cuda(non_blocking=True)
+        #imu = imu.cuda(non_blocking=True)
         if control_tensor is not None:
             control_tensor = control_tensor.cuda(non_blocking=True)
 
@@ -109,7 +119,30 @@ def main(args):
 
         print('this events shape: ', events.shape)
         print('this events length: ', len(events))
+        
+        mask = (midi_x != ds.PAD_IDX)
 
+        out = events.squeeze()[mask]
+        tgt = midi_x[mask]
+        num_right = (out == tgt)
+        num_right = torch.sum(num_right).float()
+
+        acc = num_right / len(tgt)
+        print("Accuracy", acc)
+        
+        """
+        loss = test_criterion(events, midi_x)
+
+        acc = compute_epiano_accuracy(events, midi_x)
+
+        batch_size = len(midi_x)
+        loss_meter.update(loss.item(), batch_size)
+        acc_meter.update(acc.item(), batch_size)
+        logger.info(
+                f'Val [{epoch}]/{self.num_epochs}][{i}/{num_iters}]\t'
+                f'{loss_meter}\t{acc_meter}'
+        )
+        """
 
         ss = change_time_format(sample.start_time)
         dd = change_time_format(sample.start_time + length)
@@ -118,14 +151,23 @@ def main(args):
         folder_name = "samples"
         midi_filename = sample.vid
         audio_filename = sample.vid
-        midi_dir = output_dir / 'midi' / f'{"folder_name"}'
+        midi_dir = output_dir / 'midi'
         os.makedirs(midi_dir, exist_ok=True)
+        midi_dir2 = output_dir / 'midi2'
+        os.makedirs(midi_dir2, exist_ok=True)
         midi_path = midi_dir / f'{midi_filename}{add_name}.midi'
         pm = utils.midi.tensor_to_pm(
             events.squeeze(),
             instrument=instrument
         )
         pm.write(str(midi_path))
+        
+        midi_path2 = midi_dir2 / f'{midi_filename}{add_name}.midi'
+        pm2 = utils.midi.tensor_to_pm(
+            midi_x,
+            instrument=instrument
+        )
+        pm2.write(str(midi_path2))
 
         audio_dir = output_dir / 'audio' / f'{folder_name}'
         os.makedirs(audio_dir, exist_ok=True)
@@ -136,8 +178,6 @@ def main(args):
             audio_path,
             rate=22050,
         )
-
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
